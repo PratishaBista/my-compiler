@@ -32,27 +32,48 @@ namespace mc
                 if (string.IsNullOrEmpty(line))
                     return;
 
-                var lexer = new Lexer(line);
-                while (true)
-                {
-                    var token = lexer.NextToken();
-                    if (token.Kind == SyntaxKind.EndOfFileToken)
-                        break;
-                    Console.Write($"{token.Kind}, '{token.Text}'");
+                var parser = new Parser(line);
+                var expression = parser.Parse();
 
-                    if (token.Value != null)
-                        Console.Write($" {token.Value}");
-                    Console.WriteLine();
+                var color = Console.ForegroundColor;
+                Console.ForegroundColor = ConsoleColor.DarkGray;
 
-                }
+                PrettyPrint(expression);
+                Console.ForegroundColor = color;
+
             }
         }
+
+        static void PrettyPrint(SyntaxNode node, string indent = "")
+        {
+            Console.Write(indent);
+            Console.Write(node.Kind);
+
+            if (node is SyntaxToken t && t.Value != null)
+            {
+                Console.Write(" ");
+                Console.Write(t.Value);
+            }
+
+            Console.WriteLine();
+
+            indent += "    ";
+
+            foreach (var child in node.GetChildren())
+            {
+                PrettyPrint(child, indent);
+            }
+        }
+
+
     }
 
     enum SyntaxKind
     {
         EndOfFileToken,
         NumberToken,
+        NumberExpression,
+        BinaryExpression,
 
         WhitespaceToken,
         PlusToken,
@@ -67,9 +88,9 @@ namespace mc
 
     }
 
-    class SyntaxToken
+    class SyntaxToken : SyntaxNode
     {
-        public SyntaxToken(SyntaxKind kind, int position, string text, object? value)
+        public SyntaxToken(SyntaxKind kind, int position, string? text, object? value)
         {
             Kind = kind;
             Position = position;
@@ -78,11 +99,15 @@ namespace mc
 
         }
 
+        public override SyntaxKind Kind { get; }
         public int Position { get; }
-        public string Text { get; }
-        public SyntaxKind Kind { get; }
+        public string? Text { get; }
         public object? Value { get; }
 
+        public override IEnumerable<SyntaxNode> GetChildren()
+        {
+            return Enumerable.Empty<SyntaxNode>();
+        }
     }
 
     class Lexer
@@ -166,10 +191,54 @@ namespace mc
             return new SyntaxToken(SyntaxKind.BadToken, _position++, _text.Substring(_position - 1, 1), null);
         }
     }
-   
+
     abstract class SyntaxNode
     {
-        public abstract SyntaxKind kind { get; }
+        public abstract SyntaxKind Kind { get; }
+        public abstract IEnumerable<SyntaxNode> GetChildren();
+    }
+
+    abstract class ExpressionSyntax : SyntaxNode
+    {
+
+    }
+
+    sealed class NumberExpressionSyntax : ExpressionSyntax
+    {
+        public NumberExpressionSyntax(SyntaxToken numberToken)
+        {
+            NumberToken = numberToken;
+
+        }
+
+        public override SyntaxKind Kind => SyntaxKind.NumberExpression;
+        public SyntaxToken NumberToken { get; }
+
+        public override IEnumerable<SyntaxNode> GetChildren()
+        {
+            yield return NumberToken;
+        }
+    }
+
+    sealed class BinaryExpressionSyntax : ExpressionSyntax
+    {
+        public BinaryExpressionSyntax(ExpressionSyntax left, SyntaxToken operatorToken, ExpressionSyntax right)
+        {
+            Left = left;
+            OperatorToken = operatorToken;
+            Right = right;
+        }
+        public override SyntaxKind Kind => SyntaxKind.BinaryExpression;
+        public ExpressionSyntax Left { get; }
+        public SyntaxToken OperatorToken { get; }
+        public ExpressionSyntax Right { get; }
+
+        public override IEnumerable<SyntaxNode> GetChildren()
+        {
+            yield return Left;
+            yield return OperatorToken;
+            yield return Right;
+        }
     }
     class Parser
     {
@@ -208,5 +277,41 @@ namespace mc
         }
 
         private SyntaxToken Current => Peek(0);
+
+        private SyntaxToken NextToken()
+        {
+            var current = Current;
+            _position++;
+            return current;
+        }
+
+        private SyntaxToken Match(SyntaxKind kind)
+        {
+            if (Current.Kind == kind)
+
+                return NextToken();
+
+            return new SyntaxToken(kind, Current.Position, null, null);
+        }
+
+        public ExpressionSyntax Parse()
+        {
+            var left = ParsePrimaryExpression();
+
+            while (Current.Kind == SyntaxKind.PlusToken ||
+            Current.Kind == SyntaxKind.MinusToken)
+            {
+                var operatorToken = NextToken();
+                var right = ParsePrimaryExpression();
+                left = new BinaryExpressionSyntax(left, operatorToken, right);
+            }
+            return left;
+        }
+
+        private ExpressionSyntax ParsePrimaryExpression()
+        {
+            var numberToken = Match(SyntaxKind.NumberToken);
+            return new NumberExpressionSyntax(numberToken);
+        }
     }
 }
