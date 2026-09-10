@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Minsk", "Minsk\Minsk.csproj", "{CFCA279E-7810-4C20-89ED-5CC09C3F8709}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneiss", "Gneiss\Gneiss.csproj", "{CFCA279E-7810-4C20-89ED-5CC09C3F8709}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
