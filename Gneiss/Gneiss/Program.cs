@@ -46,11 +46,14 @@ namespace mc
                     Console.ForegroundColor = ConsoleColor.DarkRed;
 
                     foreach (var diagnostic in syntaxTree.Diagnostics)
-                    {
                         Console.WriteLine(diagnostic);
-                    }
 
                     Console.ForegroundColor = color;
+                }
+                else
+                {
+                    var e = new Evaluator(syntaxTree.Root);
+                    Console.WriteLine(e.Evaluate());
                 }
             }
         }
@@ -193,9 +196,12 @@ namespace mc
 
                 var length = _position - start;
                 var text = _text.Substring(start, length);
-                int.TryParse(text, out var value);
 
-                return new SyntaxToken(SyntaxKind.WhitespaceToken, start, text, null);
+                return new SyntaxToken(
+                    SyntaxKind.WhitespaceToken,
+                    start,
+                    text,
+                    null);
             }
 
             if (Current == '+')
@@ -346,23 +352,89 @@ namespace mc
         }
         private ExpressionSyntax ParseExpression()
         {
-            var left = ParsePrimaryExpression();
+            var left = ParseTerm();
 
             while (Current.Kind == SyntaxKind.PlusToken ||
-            Current.Kind == SyntaxKind.MinusToken)
+                   Current.Kind == SyntaxKind.MinusToken)
+            {
+                var operatorToken = NextToken();
+                var right = ParseTerm();
+                left = new BinaryExpressionSyntax(left, operatorToken, right);
+            }
+
+            return left;
+        }
+
+        private ExpressionSyntax ParseTerm()
+        {
+            var left = ParsePrimaryExpression();
+
+            while (Current.Kind == SyntaxKind.StarToken ||
+                   Current.Kind == SyntaxKind.SlashToken)
             {
                 var operatorToken = NextToken();
                 var right = ParsePrimaryExpression();
                 left = new BinaryExpressionSyntax(left, operatorToken, right);
             }
+
             return left;
         }
 
-
         private ExpressionSyntax ParsePrimaryExpression()
         {
+            if (Current.Kind == SyntaxKind.OpenParenthesisToken)
+            {
+                NextToken();
+
+                var expression = ParseExpression();
+
+                Match(SyntaxKind.CloseParenthesisToken);
+                return expression;
+            }
+
             var numberToken = Match(SyntaxKind.NumberToken);
             return new NumberExpressionSyntax(numberToken);
+        }
+    }
+
+    class Evaluator
+    {
+        private readonly ExpressionSyntax _root;
+        public Evaluator(ExpressionSyntax root)
+        {
+            this._root = root;
+        }
+
+        public int Evaluate()
+        {
+            return EvaluateExpression(_root);
+        }
+
+        private int EvaluateExpression(ExpressionSyntax node)
+        {
+
+            if (node is NumberExpressionSyntax n &&
+      n.NumberToken.Value is int value)
+            {
+                return value;
+            }
+
+            if (node is BinaryExpressionSyntax binary)
+            {
+                var left = EvaluateExpression(binary.Left);
+                var right = EvaluateExpression(binary.Right);
+
+                return binary.OperatorToken.Kind switch
+                {
+                    SyntaxKind.StarToken => left * right,
+                    SyntaxKind.PlusToken => left + right,
+                    SyntaxKind.MinusToken => left - right,
+                    SyntaxKind.SlashToken => left / right,
+                    _ => throw new InvalidOperationException(
+                        $"Unexpected operator: {binary.OperatorToken.Kind}")
+                };
+            }
+            throw new InvalidOperationException($"Unexpected node: {node.Kind}");
         }
     }
 }
